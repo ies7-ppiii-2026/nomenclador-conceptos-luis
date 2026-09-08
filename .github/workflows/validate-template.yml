@@ -1,0 +1,18 @@
+name: Validate template
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  validate-template:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+      - run: uvx copier copy --defaults --data project_name=ci-validation --data project_description="CI validation project" . /tmp/generated-project
+      - run: uv sync --project /tmp/generated-project
+      - run: uv run --directory /tmp/generated-project pytest
+      - run: uv run --directory /tmp/generated-project ruff check .

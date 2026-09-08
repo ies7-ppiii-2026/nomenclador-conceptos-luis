@@ -1,0 +1,6 @@
+# Changes here will be overwritten by Copier; NEVER EDIT MANUALLY
+_commit: 2bc9297
+_src_path: /home/uba/Documents/.Taller/.main/Uba/repos/uba-forge/ventures/ds-project-template
+package_name: nomenclador_conceptos_luis
+project_description: Proyecto para mapear codigos y conceptos de distintos sistemas.
+project_name: nomenclador-conceptos-luis
