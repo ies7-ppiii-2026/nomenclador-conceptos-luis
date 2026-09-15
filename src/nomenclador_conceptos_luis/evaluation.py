@@ -250,3 +250,112 @@ def details_to_dataframe(details: list[EvaluationDetail]) -> pd.DataFrame:
             "score_of_match": d.score_of_match,
         })
     return pd.DataFrame(rows)
+
+
+def run_evaluation(
+    predictions_path: Path | None = None,
+    mapping_dir: Path | None = None,
+    output_dir: Path | None = None,
+) -> tuple[EvaluationMetrics, list[EvaluationDetail]]:
+    """Run full evaluation pipeline.
+
+    Args:
+        predictions_path: Path to predictions CSV from runner.
+        mapping_dir: Path to mapping directory.
+        output_dir: Directory for output files.
+
+    Returns:
+        Tuple of (metrics, details).
+    """
+    from nomenclador_conceptos_luis.reports import generate_report
+    import json
+
+    # Default paths
+    if mapping_dir is None:
+        mapping_dir = Path("data/raw/mapping")
+    if output_dir is None:
+        output_dir = Path("reports")
+
+    # Find latest predictions if not specified
+    if predictions_path is None:
+        processed_dir = Path("data/processed")
+        csv_files = sorted(processed_dir.glob("predictions_*.csv"))
+        if not csv_files:
+            raise FileNotFoundError(
+                "No predictions found. Run inference first: "
+                "python -m nomenclador_conceptos_luis.runner"
+            )
+        predictions_path = csv_files[-1]
+
+    print(f"Loading predictions from {predictions_path}...")
+    predictions_df = pd.read_csv(predictions_path)
+    print(f"  Loaded {len(predictions_df)} predictions")
+
+    print(f"Loading ground truth from {mapping_dir}...")
+    gt_df = load_ground_truth(mapping_dir)
+    print(f"  Loaded {len(gt_df)} ground truth mappings")
+
+    print("Evaluating predictions...")
+    metrics, details = evaluate_predictions(predictions_df, gt_df)
+
+    # Load metadata from inference
+    processed_dir = Path("data/processed")
+    metadata_files = sorted(processed_dir.glob("metadata_*.json"))
+    metadata = {}
+    if metadata_files:
+        with open(metadata_files[-1]) as f:
+            metadata = json.load(f)
+
+    # Generate report
+    print("Generating report...")
+    report_path = generate_report(metrics, details, metadata, output_dir)
+    print(f"Report saved to {report_path}")
+
+    # Print summary
+    print("\n=== Evaluation Results ===")
+    print(f"Total source codes: {metrics.total_source}")
+    print(f"Matched sources: {metrics.matched_source}")
+    print(f"Coverage: {metrics.coverage:.1%}")
+    print(f"Exact match (top-1): {metrics.exact_match_top1:.1%}")
+    print(f"Exact match (top-5): {metrics.exact_match_top5:.1%}")
+    print(f"Exact match (top-10): {metrics.exact_match_top10:.1%}")
+    print(f"Precision@1: {metrics.precision_at1:.1%}")
+    print(f"Recall@1: {metrics.recall_at1:.1%}")
+    print(f"Abstained: {metrics.abstained_count} ({metrics.abstained_pct:.1%})")
+    print(f"Missing in ground truth: {metrics.missing_in_gt}")
+
+    return metrics, details
+
+
+def main() -> None:
+    """CLI entry point for evaluation."""
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        description="Evaluate predictions against official WHO mapping"
+    )
+    parser.add_argument(
+        "--predictions",
+        type=Path,
+        default=None,
+        help="Path to predictions CSV",
+    )
+    parser.add_argument(
+        "--mapping-dir",
+        type=Path,
+        default=None,
+        help="Path to mapping directory",
+    )
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=None,
+        help="Output directory for reports",
+    )
+
+    args = parser.parse_args()
+    run_evaluation(
+        predictions_path=args.predictions,
+        mapping_dir=args.mapping_dir,
+        output_dir=args.output_dir,
+    )
